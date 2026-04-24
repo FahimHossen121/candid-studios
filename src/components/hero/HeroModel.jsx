@@ -12,7 +12,7 @@ export default function HeroModel() {
   const [isExpanded, setIsExpanded] = useState(false);
 
   return (
-    <div className="w-full px-4 sm:px-5 md:px-6 lg:px-7 xl:px-8 2xl:px-10">
+    <div className="relative z-10 w-full px-4 sm:px-5 md:px-6 lg:px-7 xl:px-8 2xl:px-10">
       <div className="mx-auto w-full max-w-screen-2xl">
         <HeroModelPlaceholder>
           <button

@@ -61,13 +61,16 @@ export default function Navbar() {
   };
 
   return (
-    <header className="w-full px-4 pt-4 sm:px-5 sm:pt-5 md:px-6 md:pt-6 lg:px-7 xl:px-8 2xl:px-10">
-      <div className="mx-auto w-full max-w-screen-2xl rounded-3xl">
-        <div className="flex items-center justify-between px-5 py-4 sm:px-6 sm:py-5 md:px-10 md:py-5 lg:px-14 lg:py-6 xl:px-20 xl:py-7 2xl:px-24">
+    <header
+      style={{ viewTransitionName: "site-header" }}
+      className="relative z-20 w-full px-4 sm:px-5 md:px-6 lg:px-7 xl:px-8 2xl:px-10"
+    >
+      <div className="mx-auto w-full max-w-screen-2xl">
+        <div className="flex items-center justify-between px-4 py-3 sm:px-5 sm:py-3 md:px-6 lg:px-7 xl:px-8 2xl:px-10">
           <Link
             href="/"
             aria-label="Candid Studios home"
-            className="inline-flex w-fit items-center text-2xl leading-none tracking-tight text-primary transition-opacity duration-200 hover:opacity-80 sm:text-3xl md:text-4xl lg:text-5xl xl:text-6xl 2xl:text-7xl"
+            className="inline-flex w-fit items-center text-xl leading-none tracking-tight text-primary transition-opacity duration-200 hover:opacity-80 sm:text-2xl md:text-3xl lg:text-[2rem]"
           >
             <span className="font-bold">candid</span>
             <span className="pl-1 font-normal tracking-tighter">studios</span>
@@ -98,7 +101,7 @@ export default function Navbar() {
           </button>
 
           <nav aria-label="Primary navigation" className="hidden md:block">
-            <ul className="flex items-center gap-6 text-base text-dark md:gap-7 md:text-base lg:gap-10 lg:text-lg xl:gap-12 xl:text-xl 2xl:gap-14 2xl:text-2xl">
+            <ul className="flex items-center gap-6 text-sm text-dark md:gap-7 lg:gap-8 lg:text-[15px]">
               {navLinks.map((link) => (
                 <li key={link.label}>
                   <NavItem href={link.href} label={link.label} />
@@ -122,7 +125,7 @@ export default function Navbar() {
         }`}
         aria-hidden={!menuOpen}
       >
-        <div className="flex items-center justify-between border-b border-white/10 px-5 py-5 sm:px-6 sm:py-6">
+        <div className="flex items-center justify-between border-b border-white/10 px-5 sm:px-6 sm:py-6">
           <Link
             href="/"
             onClick={closeMenu}

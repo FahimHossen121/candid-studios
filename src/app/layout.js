@@ -35,7 +35,7 @@ export const metadata = {
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="en" className={`${sfPro.variable} h-full antialiased`}>
+    <html lang="en" className={`${sfPro.variable} h-full antialiased`} suppressHydrationWarning={true}>
       <body className="min-h-full flex flex-col">{children}</body>
     </html>
   );

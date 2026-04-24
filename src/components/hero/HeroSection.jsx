@@ -3,8 +3,8 @@ import HeroModel from "./HeroModel";
 
 export default function HeroSection() {
   return (
-    <section className="flex min-h-0 flex-1 w-full items-center overflow-hidden py-2 sm:py-3 md:py-4">
-      <div className="flex w-full flex-col items-center justify-center gap-6 sm:gap-8 md:gap-10 lg:gap-12 xl:gap-14">
+    <section className="relative flex w-full flex-1 items-center overflow-hidden pb-4 pt-2 sm:pb-6 sm:pt-3 md:pb-8 md:pt-4">
+      <div className="relative z-20 flex w-full flex-col items-center justify-center gap-4 sm:gap-5 md:gap-6 lg:gap-8">
         <HeroContent />
         <HeroModel />
       </div>
