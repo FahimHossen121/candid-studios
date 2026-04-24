@@ -14,9 +14,9 @@ function TVModel({ url = "/models/TV.glb" }) {
 
   // Raycaster and pointer refs
   const raycasterRef = useRef(new THREE.Raycaster());
-  const pointerRef = useRef(new THREE.Vector2());
-  const pointerEventRef = useRef(null);
+  const pointerRayRef = useRef(null);
   const needsEyeUpdateRef = useRef(false);
+  const isPointerOverModelRef = useRef(false);
 
   // Eye refs and original positions
   const eyeLRef = useRef(null);
@@ -66,21 +66,19 @@ function TVModel({ url = "/models/TV.glb" }) {
     // Do not auto-play animations; we'll trigger them on click
   }, [gltfScene, cameras, camera]);
 
-  // Apply eye-tracking updates on the render loop (debounced via pointerEventRef)
+  // Apply eye-tracking updates on the render loop (driven by stored pointer ray)
   useFrame(() => {
-    if (!needsEyeUpdateRef.current || !pointerEventRef.current) return;
+    if (!needsEyeUpdateRef.current || !pointerRayRef.current) return;
     needsEyeUpdateRef.current = false;
 
-    const { x, y } = pointerEventRef.current;
-    const raycaster = raycasterRef.current;
-    raycaster.setFromCamera(new THREE.Vector2(x, y), camera);
+    const ray = pointerRayRef.current;
 
     const updateEye = (eyeRef, originalRef) => {
       if (!eyeRef.current || !eyeRef.current.parent) return;
       const eyeWorldPos = eyeRef.current.getWorldPosition(new THREE.Vector3());
       const distance = eyeWorldPos.distanceTo(camera.position);
       const pointOnRay = new THREE.Vector3();
-      raycaster.ray.at(distance, pointOnRay);
+      ray.at(distance, pointOnRay);
 
       const eyeParent = eyeRef.current.parent;
       const localTarget = eyeParent.worldToLocal(pointOnRay.clone());
@@ -96,73 +94,96 @@ function TVModel({ url = "/models/TV.glb" }) {
     updateEye(eyeRRef, eyeROriginalPosRef);
   });
 
-  // Attach pointer handlers to the canvas once the GLTF scene is available
-  useEffect(() => {
-    if (!gltfScene) return;
+  // Use R3F pointer handlers directly on the primitive so events only fire when
+  // the pointer intersects the GLTF model.
+  const handlePointerDown = (e) => {
+    e.stopPropagation();
+    let obj = e.object;
+    let handled = false;
 
-    const canvas = document.querySelector("canvas");
-    if (!canvas) return;
+    // Debug: log clicked object and available animation keys
+    try {
+      console.debug("TVModel: pointerdown on", e.object?.name, "actions:", actions ? Object.keys(actions) : undefined);
+    } catch (err) {}
 
-    const handlePointerDown = (event) => {
-      const rect = canvas.getBoundingClientRect();
-      const x = event.clientX - rect.left;
-      const y = event.clientY - rect.top;
-
-      pointerRef.current.x = (x / rect.width) * 2 - 1;
-      pointerRef.current.y = -(y / rect.height) * 2 + 1;
-
-      raycasterRef.current.setFromCamera(pointerRef.current, camera);
-      const intersects = raycasterRef.current.intersectObject(gltfScene, true);
-
-      for (const intersection of intersects) {
-        let obj = intersection.object;
-        let found = false;
-
-        while (obj && !found) {
-          const name = (obj.name || "").toLowerCase();
+    while (obj && !handled) {
+      const name = (obj.name || "").toLowerCase();
           if (name.includes("play") || name.includes("pause") || name.includes("play/pause")) {
-            if (actions && actions["Play-Pause"]) {
-              actions["Play-Pause"].reset().play();
-            }
-            found = true;
-            break;
+        if (actions) {
+          const key = Object.keys(actions).find((k) =>
+            k.toLowerCase().includes("play") || k.toLowerCase().includes("pause")
+          );
+          const action = key ? actions[key] : null;
+          if (action) {
+            action.reset();
+            try {
+              action.setLoop(THREE.LoopOnce, 1);
+            } catch (err) {}
+            action.clampWhenFinished = true;
+            action.play();
           }
-          if (name.includes("mute")) {
-            if (actions && actions["Mute"]) {
-              actions["Mute"].reset().play();
-            }
-            found = true;
-            break;
-          }
-          obj = obj.parent;
         }
-
-        if (found) break;
+        handled = true;
+        break;
       }
-    };
+          if (name.includes("mute")) {
+        if (actions) {
+          const key = Object.keys(actions).find((k) => k.toLowerCase().includes("mute"));
+          const action = key ? actions[key] : null;
+          if (action) {
+            action.reset();
+            try {
+              action.setLoop(THREE.LoopOnce, 1);
+            } catch (err) {}
+            action.clampWhenFinished = true;
+            action.play();
+          }
+        }
+        handled = true;
+        break;
+      }
+      obj = obj.parent;
+    }
+  };
 
-    const handlePointerMove = (event) => {
-      const rect = canvas.getBoundingClientRect();
-      const x = event.clientX - rect.left;
-      const y = event.clientY - rect.top;
-
-      pointerEventRef.current = {
-        x: (x / rect.width) * 2 - 1,
-        y: -(y / rect.height) * 2 + 1,
-      };
+  const handlePointerMove = (e) => {
+    e.stopPropagation();
+    // store the pointer ray for the frame loop to consume
+    pointerRayRef.current = e.ray ? e.ray.clone() : null;
+    if (pointerRayRef.current) {
       needsEyeUpdateRef.current = true;
-    };
+      isPointerOverModelRef.current = true;
+      // Debug: confirm pointer move over model
+      try {
+        console.debug("TVModel: pointermove on model at", e.point && e.point.toArray());
+      } catch (err) {}
+    }
+  };
 
-    canvas.addEventListener("pointerdown", handlePointerDown);
-    canvas.addEventListener("pointermove", handlePointerMove);
+  const handlePointerOver = (e) => {
+    e.stopPropagation();
+    isPointerOverModelRef.current = true;
+  };
 
-    return () => {
-      canvas.removeEventListener("pointerdown", handlePointerDown);
-      canvas.removeEventListener("pointermove", handlePointerMove);
-    };
-  }, [gltfScene, actions, camera]);
+  const handlePointerOut = () => {
+    isPointerOverModelRef.current = false;
+    needsEyeUpdateRef.current = false;
+    pointerRayRef.current = null;
+    if (eyeLRef.current) eyeLRef.current.position.copy(eyeLOriginalPosRef.current);
+    if (eyeRRef.current) eyeRRef.current.position.copy(eyeROriginalPosRef.current);
+  };
 
-  return <primitive ref={group} object={gltfScene} dispose={null} />;
+  return (
+    <primitive
+      ref={group}
+      object={gltfScene}
+      dispose={null}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+        onPointerOver={handlePointerOver}
+      onPointerOut={handlePointerOut}
+    />
+  );
 }
 
 export default function HeroModelCanvas() {
