@@ -52,6 +52,14 @@ export default function Navbar() {
     };
   }, []);
 
+  useEffect(() => {
+    document.body.style.overflow = menuOpen ? "hidden" : "";
+
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [menuOpen]);
+
   const toggleMenu = () => {
     setMenuOpen((open) => !open);
   };
@@ -63,7 +71,7 @@ export default function Navbar() {
   return (
     <header
       style={{ viewTransitionName: "site-header" }}
-      className="relative z-20 w-full px-4 sm:px-5 md:px-6 lg:px-7 xl:px-8 2xl:px-10"
+      className="relative z-[9999] isolate w-full px-4 sm:px-5 md:px-6 lg:px-7 xl:px-8 2xl:px-10"
     >
       <div className="mx-auto w-full max-w-screen-2xl">
         <div className="flex items-center justify-between px-4 py-3 sm:px-5 sm:py-3 md:px-6 lg:px-7 xl:px-8 2xl:px-10">
@@ -113,19 +121,19 @@ export default function Navbar() {
       </div>
 
       <div
-        className={`fixed inset-0 z-40 bg-dark/30 transition-opacity duration-300 md:hidden ${
+        className={`fixed inset-0 z-[9998] bg-dark/60 transition-opacity duration-300 md:hidden ${
           menuOpen ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"
         }`}
         onClick={closeMenu}
       />
 
       <aside
-        className={`fixed right-0 top-0 z-50 flex h-screen w-[82vw] max-w-sm flex-col bg-dark text-white shadow-2xl transition-transform duration-500 ease-out md:hidden ${
+        className={`fixed right-0 top-0 z-[9999] flex h-dvh w-[84vw] max-w-sm flex-col overflow-y-auto bg-dark text-white shadow-2xl transition-transform duration-500 ease-out md:hidden ${
           menuOpen ? "translate-x-0" : "translate-x-full"
         }`}
         aria-hidden={!menuOpen}
       >
-        <div className="flex items-center justify-between border-b border-white/10 px-5 sm:px-6 sm:py-6">
+        <div className="flex items-center justify-between border-b border-white/10 px-5 py-4 sm:px-6 sm:py-6">
           <Link
             href="/"
             onClick={closeMenu}

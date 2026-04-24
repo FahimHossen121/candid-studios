@@ -12,7 +12,7 @@ export default function HeroModel() {
   const [isExpanded, setIsExpanded] = useState(false);
 
   return (
-    <div className="relative z-10 w-full px-4 sm:px-5 md:px-6 lg:px-7 xl:px-8 2xl:px-10">
+    <div className="relative w-full px-2 sm:px-5 md:px-6 lg:px-7 xl:px-8 2xl:px-10">
       <div className="mx-auto w-full max-w-screen-2xl">
         <HeroModelPlaceholder>
           <button
@@ -28,7 +28,7 @@ export default function HeroModel() {
       </div>
 
       <div
-        className={`fixed inset-0 z-50 bg-bg/95 backdrop-blur-sm transition-opacity duration-300 ${
+        className={`fixed inset-0 bg-bg/95 backdrop-blur-sm transition-opacity duration-300 ${
           isExpanded
             ? "pointer-events-auto opacity-100"
             : "pointer-events-none opacity-0"
