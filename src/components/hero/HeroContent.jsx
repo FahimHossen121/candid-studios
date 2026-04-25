@@ -1,8 +1,10 @@
 import { ViewTransition } from "react";
 
-export default function HeroContent() {
+export default function HeroContent({ className = "" }) {
   return (
-    <div className="relative w-full px-4 sm:px-5 md:px-6 lg:px-7 xl:px-8 2xl:px-10">
+    <div
+      className={`relative w-full px-4 sm:px-5 md:px-6 lg:px-7 xl:px-8 2xl:px-10 ${className}`}
+    >
       <div className="mx-auto flex w-full max-w-4xl flex-col items-center gap-2 text-center sm:gap-2 md:gap-2">
         <h1 className="text-4xl font-medium tracking-tight text-primary sm:text-5xl md:text-6xl lg:text-[4.25rem]">
           Think Candid
