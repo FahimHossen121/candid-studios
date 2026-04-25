@@ -102,11 +102,24 @@ body {
   }
 }
 
+@keyframes hero-loader {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(200%);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   ::view-transition-old(*),
   ::view-transition-new(*),
   ::view-transition-group(*) {
     animation-duration: 0s !important;
     animation-delay: 0s !important;
+  }
+
+  .animate-\[hero-loader_1\.1s_ease-in-out_infinite\] {
+    animation-duration: 0s !important;
   }
 }

@@ -9,6 +9,8 @@ const HeroModelCanvas = dynamic(() => import("./HeroModelCanvas"), {
 export default function HeroModel({
   isImmersive,
   isHoverEnabled,
+  hasStartedIntro,
+  onSceneReady,
   onModelHoverChange,
   onModelActivate,
   onBackdropActivate,
@@ -25,17 +27,13 @@ export default function HeroModel({
         <HeroModelCanvas
           isImmersive={isImmersive}
           isHoverEnabled={isHoverEnabled}
+          hasStartedIntro={hasStartedIntro}
+          onSceneReady={onSceneReady}
           onModelHoverChange={onModelHoverChange}
           onModelActivate={onModelActivate}
           onBackdropActivate={onBackdropActivate}
         />
       </div>
-
-      <div
-        className={`absolute inset-x-0 bottom-0 h-40 bg-linear-to-t from-bg via-bg/70 to-transparent transition-opacity duration-500 ease-out sm:h-48 md:h-56 ${
-          isImmersive ? "opacity-0" : "opacity-100"
-        }`}
-      />
 
       {!isHoverEnabled && isImmersive && (
         <button

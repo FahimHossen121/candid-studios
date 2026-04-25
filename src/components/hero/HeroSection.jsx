@@ -7,7 +7,10 @@ import HeroModel from "./HeroModel";
 export default function HeroSection() {
   const [isImmersive, setIsImmersive] = useState(false);
   const [isHoverEnabled, setIsHoverEnabled] = useState(false);
+  const [isSceneLoaded, setIsSceneLoaded] = useState(false);
+  const [hasStartedIntro, setHasStartedIntro] = useState(false);
   const hoverExitTimeoutRef = useRef(null);
+  const introStartFrameRef = useRef(null);
 
   useEffect(() => {
     const mediaQuery = window.matchMedia("(hover: hover) and (pointer: fine)");
@@ -50,8 +53,31 @@ export default function HeroSection() {
       if (hoverExitTimeoutRef.current) {
         window.clearTimeout(hoverExitTimeoutRef.current);
       }
+      if (introStartFrameRef.current) {
+        window.cancelAnimationFrame(introStartFrameRef.current);
+      }
     };
   }, []);
+
+  useEffect(() => {
+    if (!isSceneLoaded || hasStartedIntro) {
+      return;
+    }
+
+    introStartFrameRef.current = window.requestAnimationFrame(() => {
+      introStartFrameRef.current = window.requestAnimationFrame(() => {
+        setHasStartedIntro(true);
+        introStartFrameRef.current = null;
+      });
+    });
+
+    return () => {
+      if (introStartFrameRef.current) {
+        window.cancelAnimationFrame(introStartFrameRef.current);
+        introStartFrameRef.current = null;
+      }
+    };
+  }, [hasStartedIntro, isSceneLoaded]);
 
   const setImmersiveState = (nextState) => {
     startTransition(() => {
@@ -101,16 +127,38 @@ export default function HeroSection() {
       <HeroModel
         isImmersive={isImmersive}
         isHoverEnabled={isHoverEnabled}
+        hasStartedIntro={hasStartedIntro}
+        onSceneReady={() => setIsSceneLoaded(true)}
         onModelHoverChange={handleModelHoverChange}
         onModelActivate={handleModelActivate}
         onBackdropActivate={handleBackdropActivate}
         onClose={() => setImmersiveState(false)}
       />
 
+      <div
+        className={`fixed inset-0 z-[10000] flex items-center justify-center bg-bg transition-opacity duration-500 ease-out ${
+          hasStartedIntro
+            ? "pointer-events-none opacity-0"
+            : "pointer-events-auto opacity-100"
+        }`}
+        aria-hidden={hasStartedIntro}
+      >
+        <div className="flex flex-col items-center gap-4 text-center text-primary">
+          <p className="text-2xl font-semibold tracking-tight sm:text-3xl">
+            candid studios
+          </p>
+          <div className="h-1.5 w-24 overflow-hidden rounded-full bg-primary/12">
+            <div className="h-full w-1/2 animate-[hero-loader_1.1s_ease-in-out_infinite] rounded-full bg-primary" />
+          </div>
+        </div>
+      </div>
+
       <div className="relative z-20 flex w-full flex-col items-center justify-start">
         <div
           className={`w-full transition-all duration-500 ease-out ${
-            isImmersive
+            !hasStartedIntro
+              ? "pointer-events-none opacity-0"
+              : isImmersive
               ? "pointer-events-none translate-y-6 opacity-0 blur-md"
               : "pointer-events-auto translate-y-0 opacity-100 blur-0"
           }`}

@@ -2,13 +2,32 @@
 
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { useGLTF, useAnimations, Environment } from "@react-three/drei";
+import { useGLTF, Environment } from "@react-three/drei";
 import * as THREE from "three";
 
 const INTRO_DURATION = 1.6;
 const CAMERA_DAMPING = 4.5;
 const EYE_DAMPING = 10;
 const EYE_MAX_OFFSET = 0.08;
+const NON_INTERACTIVE_NODE_NAMES = new Set(["Plane.001"]);
+const CAMERA_POSITION_PRESETS = {
+  canvasFallback: {
+    position: [0, 1.8, 8],
+    fov: 18,
+  },
+  intro: {
+    depthOffset: -1.95,
+    heightOffset: 0.72,
+    lateralOffset: -0.18,
+    fovOffset: 4,
+  },
+  immersive: {
+    depthOffset: 4,
+    heightOffset: -1.4,
+    fovOffset: -2,
+    minFov: 18,
+  },
+};
 
 function easeOutCubic(value) {
   return 1 - (1 - value) ** 3;
@@ -37,11 +56,11 @@ function createIntroPose(basePose) {
   return {
     position: basePose.position
       .clone()
-      .addScaledVector(forward, -1.95)
-      .addScaledVector(up, 0.72)
-      .addScaledVector(right, -0.18),
+      .addScaledVector(forward, CAMERA_POSITION_PRESETS.intro.depthOffset)
+      .addScaledVector(up, CAMERA_POSITION_PRESETS.intro.heightOffset)
+      .addScaledVector(right, CAMERA_POSITION_PRESETS.intro.lateralOffset),
     quaternion: basePose.quaternion.clone(),
-    fov: basePose.fov + 4,
+    fov: basePose.fov + CAMERA_POSITION_PRESETS.intro.fovOffset,
     near: basePose.near,
     far: basePose.far,
   };
@@ -58,16 +77,19 @@ function createImmersivePose(basePose) {
   return {
     position: basePose.position
       .clone()
-      .addScaledVector(forward, 1.55)
-      .addScaledVector(up, 0.05),
+      .addScaledVector(forward, CAMERA_POSITION_PRESETS.immersive.depthOffset)
+      .addScaledVector(up, CAMERA_POSITION_PRESETS.immersive.heightOffset),
     quaternion: basePose.quaternion.clone(),
-    fov: Math.max(basePose.fov - 2, 22),
+    fov: Math.max(
+      basePose.fov + CAMERA_POSITION_PRESETS.immersive.fovOffset,
+      CAMERA_POSITION_PRESETS.immersive.minFov,
+    ),
     near: basePose.near,
     far: basePose.far,
   };
 }
 
-function CameraRig({ basePose, isImmersive }) {
+function CameraRig({ basePose, isImmersive, shouldPlayIntro }) {
   const introStartTimeRef = useRef(null);
   const introPoseRef = useRef(null);
   const immersivePoseRef = useRef(null);
@@ -80,9 +102,17 @@ function CameraRig({ basePose, isImmersive }) {
 
     introPoseRef.current = createIntroPose(basePose);
     immersivePoseRef.current = createImmersivePose(basePose);
-    introStartTimeRef.current = performance.now();
     shouldResetPoseRef.current = true;
   }, [basePose]);
+
+  useEffect(() => {
+    if (!basePose) {
+      return;
+    }
+
+    introStartTimeRef.current = shouldPlayIntro ? performance.now() : null;
+    shouldResetPoseRef.current = true;
+  }, [basePose, shouldPlayIntro]);
 
   useFrame((state, delta) => {
     if (!basePose || !introPoseRef.current || !immersivePoseRef.current) {
@@ -99,6 +129,10 @@ function CameraRig({ basePose, isImmersive }) {
     if (shouldResetPoseRef.current) {
       applyCameraPose(sceneCamera, introPoseRef.current);
       shouldResetPoseRef.current = false;
+    }
+
+    if (!shouldPlayIntro) {
+      return;
     }
 
     if (introElapsed < INTRO_DURATION) {
@@ -144,18 +178,22 @@ function CameraRig({ basePose, isImmersive }) {
 function TVModel({
   url = "/models/TV.glb",
   onCameraReady,
+  onSceneReady,
   onModelHoverChange,
   onModelActivate,
+  isImmersive,
 }) {
-  const group = useRef();
   const gltf = useGLTF(url);
   const { scene: gltfScene, cameras, animations } = gltf || {};
-  const { actions } = useAnimations(animations, group);
   const { camera } = useThree();
 
   const raycasterRef = useRef(new THREE.Raycaster());
   const pointerNdcRef = useRef(new THREE.Vector2());
   const hasPointerRef = useRef(false);
+  const hoverTargetsRef = useRef([]);
+  const isHoveringModelRef = useRef(false);
+  const controlMixerRef = useRef(null);
+  const controlActionsRef = useRef({ mute: null, playPause: null });
 
   const eyeLRef = useRef(null);
   const eyeRRef = useRef(null);
@@ -172,20 +210,78 @@ function TVModel({
     [],
   );
 
+  const playControlAnimation = (actionName) => {
+    const mixer = controlMixerRef.current;
+    const action = controlActionsRef.current[actionName];
+
+    if (!mixer || !action) {
+      return false;
+    }
+
+    mixer.stopAllAction();
+    if (!action) {
+      return false;
+    }
+
+    action.reset();
+    action.setLoop(THREE.LoopOnce, 1);
+    action.setEffectiveTimeScale(1);
+    action.setEffectiveWeight(1);
+    action.clampWhenFinished = true;
+    action.enabled = true;
+    action.paused = false;
+    action.play();
+    return true;
+  };
+
   useEffect(() => {
     if (!gltfScene) {
       return;
     }
 
+    hoverTargetsRef.current = [];
+    controlMixerRef.current = null;
+    controlActionsRef.current = { mute: null, playPause: null };
+
+    let buttonArmature = null;
+
     gltfScene.traverse((child) => {
       if (child.isMesh) {
         child.castShadow = false;
         child.receiveShadow = false;
+
+        if (NON_INTERACTIVE_NODE_NAMES.has(child.name)) {
+          child.raycast = () => null;
+        } else {
+          hoverTargetsRef.current.push(child);
+        }
       }
       if (child.isLight) {
         child.castShadow = false;
       }
+      if (child.name === "Button_armature") {
+        buttonArmature = child;
+      }
     });
+
+    if (buttonArmature && animations?.length) {
+      const mixer = new THREE.AnimationMixer(buttonArmature);
+      const muteClip =
+        animations.find((clip) => clip.name === "Mute") ??
+        animations.find((clip) => clip.name.toLowerCase().includes("mute"));
+      const playPauseClip =
+        animations.find((clip) => clip.name === "Play-Pause") ??
+        animations.find((clip) => {
+          const lowerName = clip.name.toLowerCase();
+          return lowerName.includes("play") || lowerName.includes("pause");
+        });
+
+      controlMixerRef.current = mixer;
+      controlActionsRef.current = {
+        mute: muteClip ? mixer.clipAction(muteClip) : null,
+        playPause: playPauseClip ? mixer.clipAction(playPauseClip) : null,
+      };
+    }
 
     if (cameras && cameras.length > 0) {
       const gltfCam = cameras[0];
@@ -215,7 +311,10 @@ function TVModel({
         eyeROriginalPosRef.current.copy(child.position);
       }
     });
-  }, [gltfScene, cameras, camera, onCameraReady]);
+    if (eyeLRef.current && eyeRRef.current) {
+      onSceneReady?.();
+    }
+  }, [animations, gltfScene, cameras, camera, onCameraReady, onSceneReady]);
 
   useEffect(() => {
     const updatePointer = (clientX, clientY) => {
@@ -261,6 +360,10 @@ function TVModel({
   }, []);
 
   useFrame((_, delta) => {
+    if (controlMixerRef.current) {
+      controlMixerRef.current.update(delta);
+    }
+
     const blend = 1 - Math.exp(-EYE_DAMPING * delta);
 
     const relaxEye = (eyeRef, originalRef) => {
@@ -276,12 +379,23 @@ function TVModel({
     }
 
     if (!hasPointerRef.current) {
+      if (isHoveringModelRef.current) {
+        isHoveringModelRef.current = false;
+        onModelHoverChange?.(false);
+      }
       relaxEye(eyeLRef, eyeLOriginalPosRef);
       relaxEye(eyeRRef, eyeROriginalPosRef);
       return;
     }
 
     raycasterRef.current.setFromCamera(pointerNdcRef.current, camera);
+    const isHoveringModel =
+      raycasterRef.current.intersectObjects(hoverTargetsRef.current, false).length > 0;
+
+    if (isHoveringModelRef.current !== isHoveringModel) {
+      isHoveringModelRef.current = isHoveringModel;
+      onModelHoverChange?.(isHoveringModel);
+    }
 
     const updateEye = (eyeRef, originalRef) => {
       if (!eyeRef.current || !eyeRef.current.parent) {
@@ -313,6 +427,15 @@ function TVModel({
     let obj = e.object;
     let handled = false;
 
+    if (NON_INTERACTIVE_NODE_NAMES.has(obj?.name)) {
+      return;
+    }
+
+    if (!isImmersive) {
+      onModelActivate?.();
+      return;
+    }
+
     while (obj && !handled) {
       const name = (obj.name || "").toLowerCase();
       if (
@@ -320,76 +443,50 @@ function TVModel({
         name.includes("pause") ||
         name.includes("play/pause")
       ) {
-        if (actions) {
-          const key = Object.keys(actions).find((k) =>
-            k.toLowerCase().includes("play") || k.toLowerCase().includes("pause"),
-          );
-          const action = key ? actions[key] : null;
-          if (action) {
-            action.reset();
-            try {
-              action.setLoop(THREE.LoopOnce, 1);
-            } catch {}
-            action.play();
-          }
+        handled = playControlAnimation("playPause");
+        if (handled) {
+          break;
         }
-        handled = true;
-        break;
       }
       if (name.includes("mute")) {
-        if (actions) {
-          const key = Object.keys(actions).find((k) => k.toLowerCase().includes("mute"));
-          const action = key ? actions[key] : null;
-          if (action) {
-            action.reset();
-            try {
-              action.setLoop(THREE.LoopOnce, 1);
-            } catch {}
-            action.play();
-          }
+        handled = playControlAnimation("mute");
+        if (handled) {
+          break;
         }
-        handled = true;
-        break;
       }
       obj = obj.parent;
     }
-
-    onModelActivate?.();
-  };
-
-  const handlePointerOver = (e) => {
-    e.stopPropagation();
-    onModelHoverChange?.(true);
-  };
-
-  const handlePointerOut = (e) => {
-    e.stopPropagation();
-    onModelHoverChange?.(false);
   };
 
   return (
     <primitive
-      ref={group}
       object={gltfScene}
       dispose={null}
       onPointerDown={handlePointerDown}
-      onPointerOver={handlePointerOver}
-      onPointerOut={handlePointerOut}
     />
   );
 }
 
 export default function HeroModelCanvas({
   isImmersive,
+  hasStartedIntro,
+  onSceneReady,
   onModelHoverChange,
   onModelActivate,
   onBackdropActivate,
 }) {
   const [baseCameraPose, setBaseCameraPose] = useState(null);
+  const [isModelReady, setIsModelReady] = useState(false);
+
+  useEffect(() => {
+    if (baseCameraPose && isModelReady) {
+      onSceneReady?.();
+    }
+  }, [baseCameraPose, isModelReady, onSceneReady]);
 
   return (
     <Canvas
-      camera={{ position: [0, 1.8, 8], fov: 18 }}
+      camera={CAMERA_POSITION_PRESETS.canvasFallback}
       dpr={[1, 1.5]}
       gl={{ alpha: true, antialias: true, powerPreference: "high-performance" }}
       onPointerMissed={onBackdropActivate}
@@ -397,13 +494,19 @@ export default function HeroModelCanvas({
       <ambientLight intensity={0.15} />
       <directionalLight position={[-1, 2, 2]} intensity={5} />
       <Suspense fallback={null}>
-        <CameraRig basePose={baseCameraPose} isImmersive={isImmersive} />
+        <CameraRig
+          basePose={baseCameraPose}
+          isImmersive={isImmersive}
+          shouldPlayIntro={hasStartedIntro}
+        />
         <Environment files="/models/studio_kontrast_04_1k.hdr" background={false} />
         <TVModel
           url="/models/TV.glb"
           onCameraReady={setBaseCameraPose}
+          onSceneReady={() => setIsModelReady(true)}
           onModelHoverChange={onModelHoverChange}
           onModelActivate={onModelActivate}
+          isImmersive={isImmersive}
         />
       </Suspense>
     </Canvas>
